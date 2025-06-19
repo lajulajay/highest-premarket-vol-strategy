@@ -2,6 +2,10 @@
 
 This is a Pine Script indicator designed for TradingView that detects breakout trading setups based on pre-market consolidation and price action.
 
+# High Volume Day Strategy
+
+[![Release](https://img.shields.io/github/v/release/lajulajay/high-volume-day-strategy?sort=semver)](https://github.com/lajulajay/high-volume-day-strategy/releases)
+
 ## 📂 Project Structure
 
 ```text
@@ -44,3 +48,10 @@ git clone https://github.com/your-username/high-volume-day-strategy.git
 ## 🤝 Contributing
 
 This is an early MVP — PRs welcome to improve pattern detection or parameter configurability.
+
+## 🔖 Version
+
+**Current Version:** `v1.0.0`  
+Initial release with breakout logic, target lines, and risk:reward plotting.
+
+[View release notes →](https://github.com/lajulajay/high-volume-day-strategy/releases/tag/v1.0.0)

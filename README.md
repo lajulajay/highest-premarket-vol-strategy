@@ -4,11 +4,13 @@ This is a Pine Script indicator designed for TradingView that detects breakout t
 
 ## 📂 Project Structure
 
+```text
 high-volume-day-strategy/
 ├── high-volume-day-strategy.pine
 ├── README.md
 ├── LICENSE
 └── .gitignore
+```
 
 ## 🚀 Features
 

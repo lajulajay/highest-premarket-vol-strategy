@@ -1,0 +1,427 @@
+//@version=6
+// @scriptVersion 2.0.0
+indicator("Highest Pre-market Volume Strategy", overlay=true, max_lines_count=20, max_labels_count=50)
+
+// ============================================================================
+// TRADINGVIEW BAR LIMITS & OPTIMIZATION
+// ============================================================================
+// Free Account: ~5,000 bars | Pro: ~10,000 bars | Pro+: ~20,000 bars | Premium: ~50,000+ bars
+// 1m bars per trading day: ~390 | 5m bars per trading day: ~78
+// Current settings optimized for Free accounts:
+// - 1m: 10 days × 390 = 3,900 bars (Free safe)
+// - 5m: 8 days × 78 = 624 bars (Free safe)
+// Pro users can increase lookback periods for more historical data
+
+// ============================================================================
+// INPUT PARAMETERS
+// ============================================================================
+premarket_start = input.time(defval=timestamp("2025-01-01 04:00 +0000"), title="Pre-market Start Time", tooltip="Start of pre-market session")
+premarket_end = input.time(defval=timestamp("2025-01-01 09:30 +0000"), title="Pre-market End Time", tooltip="End of pre-market session")
+regular_start = input.time(defval=timestamp("2025-01-01 09:30 +0000"), title="Regular Hours Start", tooltip="Start of regular trading hours")
+
+// Analysis mode
+retrospective_mode = input.bool(false, "Retrospective Analysis", tooltip="Scan historical data for past patterns (may be slower)")
+max_historical_days = input.int(30, "Max Historical Days to Scan", minval=5, maxval=60, tooltip="Maximum days to scan for historical patterns")
+
+// Pre-market volume analysis parameters - optimized for 1m charts
+premarket_volume_lookback_1m = input.int(10, "1m Pre-market Volume Lookback Days", minval=5, maxval=20, tooltip="Days to look back for 1m pre-market volume comparison (Free: 5-10 days, Pro: 10-20 days)")
+min_premarket_volume_threshold = input.float(1.5, "Min Pre-market Volume vs Historic Highest", minval=1.0, maxval=5.0, tooltip="Pre-market volume must be at least X times historic highest")
+
+// Pattern detection parameters
+min_move_pct = input.float(2.0, "Minimum Move %", minval=1.0, maxval=10.0, tooltip="Minimum percentage move for strong initial move")
+consolidation_threshold = input.float(1.5, "Consolidation Threshold %", minval=0.5, maxval=5.0, tooltip="Maximum range for consolidation as % of move high")
+min_consolidation_bars = input.int(5, "Min Consolidation Bars", minval=3, maxval=20, tooltip="Minimum bars for valid consolidation")
+
+// 5m confirmation settings
+use_5m_confirmation = input.bool(true, "Use 5m Confirmation", tooltip="Confirm patterns on 5m chart")
+premarket_volume_lookback_5m = input.int(8, "5m Pre-market Volume Lookback Days", minval=3, maxval=15, tooltip="Days to look back for 5m pre-market volume comparison (Free: 3-8 days, Pro: 8-15 days)")
+
+// Display options
+show_targets = input.bool(true, "Show Targets", tooltip="Display target levels")
+show_patterns = input.bool(true, "Show Pattern Labels", tooltip="Show bull flag, ABCD, retest labels")
+alert_on_breakout = input.bool(true, "Alert on Breakout", tooltip="Send alert when breakout occurs")
+
+// ============================================================================
+// TIME AND SESSION FUNCTIONS
+// ============================================================================
+is_premarket() =>
+    current_time = time(timeframe.period, "0000-0000", "America/New_York")
+    hour_minute = hour(current_time, "America/New_York") * 100 + minute(current_time, "America/New_York")
+    hour_minute >= 400 and hour_minute < 930
+
+is_regular_hours() =>
+    current_time = time(timeframe.period, "0000-0000", "America/New_York")
+    hour_minute = hour(current_time, "America/New_York") * 100 + minute(current_time, "America/New_York")
+    hour_minute >= 930 and hour_minute < 1600
+
+// ============================================================================
+// PRE-MARKET VOLUME ANALYSIS - 1M BASED
+// ============================================================================
+// Calculate historic pre-market volume highest using 1m data
+var float historic_premarket_volume_highest_1m = na
+var float current_premarket_session_volume = 0.0
+
+// Get 1m volume data for historic pre-market volume comparison
+volume_1m = request.security(syminfo.tickerid, "1", volume, lookahead=barmerge.lookahead_off)
+var float premarket_volume_highest_1m = na
+
+// Update historic pre-market volume highest on daily change
+if ta.change(time("1D")) != 0
+    // Calculate historic pre-market volume highest from previous days using 1m data
+    premarket_volume_highest_1m := ta.highest(volume_1m, premarket_volume_lookback_1m * 390) // 390 1m bars per trading day
+    current_premarket_session_volume := 0.0
+
+// Accumulate current pre-market session volume
+if is_premarket()
+    current_premarket_session_volume := current_premarket_session_volume + volume
+
+// Check if current pre-market session volume meets historic highest requirement
+premarket_volume_requirement_met_1m = current_premarket_session_volume >= (premarket_volume_highest_1m * min_premarket_volume_threshold)
+
+// ============================================================================
+// 5M CONFIRMATION PRE-MARKET VOLUME ANALYSIS
+// ============================================================================
+var float premarket_volume_highest_5m = na
+var float current_premarket_session_volume_5m = 0.0
+
+// Get 5m volume data for pre-market volume confirmation
+volume_5m = request.security(syminfo.tickerid, "5", volume, lookahead=barmerge.lookahead_off)
+
+// Update 5m historic pre-market volume on daily change
+if ta.change(time("1D")) != 0
+    premarket_volume_highest_5m := ta.highest(volume_5m, premarket_volume_lookback_5m * 78) // 78 5m bars per trading day
+    current_premarket_session_volume_5m := 0.0
+
+// Accumulate 5m pre-market session volume
+if is_premarket()
+    current_premarket_session_volume_5m := current_premarket_session_volume_5m + volume_5m
+
+// 5m pre-market volume requirement
+premarket_volume_requirement_met_5m = current_premarket_session_volume_5m >= (premarket_volume_highest_5m * min_premarket_volume_threshold)
+
+// Combined pre-market volume requirement
+premarket_volume_requirement_met = premarket_volume_requirement_met_1m and (not use_5m_confirmation or premarket_volume_requirement_met_5m)
+
+// ============================================================================
+// PATTERN DETECTION VARIABLES
+// ============================================================================
+var float premarket_open = na
+var float premarket_high = na
+var float premarket_low = na
+var float consolidation_high = na
+var float consolidation_low = na
+var float first_breakout_price = na
+var int consolidation_start_bar = na
+var int consolidation_end_bar = na
+var bool strong_move_detected = false
+var bool consolidation_detected = false
+var bool pattern_identified = false
+var bool breakout_occurred = false
+var bool only_one_move = true
+
+// Line variables
+var line premarket_high_line = na
+var line premarket_low_line = na
+var line breakout_line = na
+var line target_5pct_line = na
+var line target_rr_line = na
+var line target_measured_line = na
+
+// ============================================================================
+// STEP 1: IDENTIFY PRE-MARKET PATTERN
+// ============================================================================
+// Reset variables at start of new day
+if ta.change(time("1D")) != 0
+    premarket_open := na
+    premarket_high := na
+    premarket_low := na
+    consolidation_high := na
+    consolidation_low := na
+    first_breakout_price := na
+    consolidation_start_bar := na
+    consolidation_end_bar := na
+    strong_move_detected := false
+    consolidation_detected := false
+    pattern_identified := false
+    breakout_occurred := false
+    only_one_move := true
+
+// Track pre-market session
+if is_premarket()
+    if na(premarket_open)
+        premarket_open := open
+        premarket_high := high
+        premarket_low := low
+    else
+        premarket_high := math.max(premarket_high, high)
+        premarket_low := math.min(premarket_low, low)
+    
+    // Detect strong initial move (only if volume requirement is met)
+    if premarket_volume_requirement_met and not strong_move_detected
+        move_pct = ((premarket_high - premarket_open) / premarket_open) * 100
+        if move_pct >= min_move_pct
+            strong_move_detected := true
+            consolidation_high := premarket_high
+            consolidation_low := premarket_low
+            consolidation_start_bar := bar_index
+    
+    // Detect consolidation after strong move
+    if strong_move_detected and not consolidation_detected
+        current_range = premarket_high - premarket_low
+        range_pct = (current_range / consolidation_high) * 100
+        
+        // Check if we're in consolidation (tight range)
+        if range_pct <= consolidation_threshold
+            consolidation_detected := true
+            consolidation_end_bar := bar_index
+            consolidation_high := premarket_high
+            consolidation_low := premarket_low
+        else
+            // If range expands too much, reset (ensures only one move)
+            only_one_move := false
+
+// Identify complete pattern
+if strong_move_detected and consolidation_detected and only_one_move and premarket_volume_requirement_met and not pattern_identified
+    pattern_identified := true
+    premarket_high := consolidation_high
+    premarket_low := consolidation_low
+
+// ============================================================================
+// STEP 2: MARK KEY LEVELS
+// ============================================================================
+if pattern_identified and na(premarket_high_line)
+    // Draw resistance at consolidation high (candle body, not wick)
+    premarket_high_line := line.new(bar_index - 20, premarket_high, bar_index + 50, premarket_high, color=color.red, width=2, style=line.style_solid)
+    
+    // Draw support at consolidation low (candle body, not wick)
+    premarket_low_line := line.new(bar_index - 20, premarket_low, bar_index + 50, premarket_low, color=color.green, width=2, style=line.style_solid)
+    
+    // Add annotations
+    label.new(bar_index, premarket_high, "Pre-Market High\n" + str.tostring(premarket_high, "#.##"), color=color.red, style=label.style_label_down, textcolor=color.white, size=size.small)
+    label.new(bar_index, premarket_low, "Pre-Market Low\n" + str.tostring(premarket_low, "#.##"), color=color.green, style=label.style_label_up, textcolor=color.white, size=size.small)
+
+// ============================================================================
+// STEP 3: CAPTURE BREAKOUT
+// ============================================================================
+if pattern_identified and is_regular_hours() and not breakout_occurred
+    if close > premarket_high and high > premarket_high
+        breakout_occurred := true
+        first_breakout_price := close  // Use actual breakout price, not premarket high
+        
+        // Draw "first breakout" line
+        breakout_line := line.new(bar_index, first_breakout_price, bar_index + 30, first_breakout_price, color=color.blue, width=3, style=line.style_dashed)
+        
+        // Add "first breakout" annotation
+        label.new(bar_index, first_breakout_price, "FIRST BREAKOUT\n" + str.tostring(first_breakout_price, "#.##"), color=color.blue, style=label.style_label_left, textcolor=color.white, size=size.normal)
+        
+        if alert_on_breakout
+            alert("First breakout detected at " + str.tostring(first_breakout_price, "#.##"), alert.freq_once_per_bar)
+
+// ============================================================================
+// STEP 4: MARK TARGETS
+// ============================================================================
+if breakout_occurred and show_targets and na(target_5pct_line)
+    // 5% gain target
+    target_5pct = first_breakout_price * 1.05
+    target_5pct_line := line.new(bar_index, target_5pct, bar_index + 50, target_5pct, color=color.yellow, width=2, style=line.style_dotted)
+    label.new(bar_index + 5, target_5pct, "5% GAIN\n" + str.tostring(target_5pct, "#.##"), color=color.yellow, style=label.style_label_left, textcolor=color.black, size=size.small)
+    
+    // 1:3 Risk:Reward target
+    risk = first_breakout_price - premarket_low
+    target_rr = first_breakout_price + (risk * 3)
+    target_rr_line := line.new(bar_index, target_rr, bar_index + 50, target_rr, color=color.orange, width=2, style=line.style_dotted)
+    label.new(bar_index + 10, target_rr, "1:3 RISK:REWARD\n" + str.tostring(target_rr, "#.##"), color=color.orange, style=label.style_label_left, textcolor=color.white, size=size.small)
+    
+    // Measured move target
+    premarket_range = premarket_high - premarket_low
+    target_measured = premarket_high + premarket_range
+    target_measured_line := line.new(bar_index, target_measured, bar_index + 50, target_measured, color=color.purple, width=2, style=line.style_dotted)
+    label.new(bar_index + 15, target_measured, "MEASURED MOVE\n" + str.tostring(target_measured, "#.##"), color=color.purple, style=label.style_label_left, textcolor=color.white, size=size.small)
+
+// ============================================================================
+// PATTERN RECOGNITION (Bull Flag, ABCD, Retests)
+// ============================================================================
+if breakout_occurred and show_patterns and is_regular_hours()
+    // Retest detection - price comes back to test breakout level
+    if low <= first_breakout_price * 1.01 and low >= first_breakout_price * 0.99 and close > first_breakout_price
+        label.new(bar_index, low, "RETEST", color=#00FFFF, style=label.style_label_up, textcolor=color.black, size=size.small)
+    
+    // Bull flag detection - consolidation with lower highs and higher lows
+    if ta.falling(high, 3) and ta.rising(low, 3) and volume < ta.sma(volume, 10)
+        label.new(bar_index, high, "BULL FLAG", color=#00FF00, style=label.style_label_down, textcolor=color.black, size=size.small)
+    
+    // ABCD pattern detection - price makes a swing low, then higher low, then breaks out
+    if ta.crossover(close, ta.sma(close, 5)) and volume > ta.sma(volume, 10)
+        label.new(bar_index, low, "ABCD", color=#FF00FF, style=label.style_label_up, textcolor=color.white, size=size.small)
+
+// ============================================================================
+// VISUAL ENHANCEMENTS
+// ============================================================================
+// Color code candles during pre-market consolidation
+bgcolor(is_premarket() and pattern_identified ? color.new(color.gray, 90) : na, title="Pre-market Consolidation")
+
+// Highlight breakout candle
+bgcolor(breakout_occurred and is_regular_hours() and not breakout_occurred[1] ? color.new(color.blue, 80) : na, title="Breakout Candle")
+
+// ============================================================================
+// TABLE DISPLAY
+// ============================================================================
+if barstate.islast and pattern_identified
+    var table info_table = table.new(position.top_right, 2, 8, bgcolor=color.white, border_width=1)
+    
+    table.cell(info_table, 0, 0, "1m Pre-market Volume vs Historic", text_color=color.black, bgcolor=color.blue)
+    volume_ratio_1m = na(premarket_volume_highest_1m) ? "N/A" : str.tostring(current_premarket_session_volume / premarket_volume_highest_1m, "#.##") + "x"
+    table.cell(info_table, 1, 0, volume_ratio_1m, text_color=color.white, bgcolor=color.blue)
+    
+    if use_5m_confirmation
+        table.cell(info_table, 0, 1, "5m Pre-market Volume vs Historic", text_color=color.black, bgcolor=color.blue)
+        volume_ratio_5m = na(premarket_volume_highest_5m) ? "N/A" : str.tostring(current_premarket_session_volume_5m / premarket_volume_highest_5m, "#.##") + "x"
+        table.cell(info_table, 1, 1, volume_ratio_5m, text_color=color.white, bgcolor=color.blue)
+    
+    table.cell(info_table, 0, 2, "Pre-Market High", text_color=color.black, bgcolor=color.red)
+    table.cell(info_table, 1, 2, str.tostring(premarket_high, "#.##"), text_color=color.white, bgcolor=color.red)
+    
+    table.cell(info_table, 0, 3, "Pre-Market Low", text_color=color.black, bgcolor=color.green)
+    table.cell(info_table, 1, 3, str.tostring(premarket_low, "#.##"), text_color=color.white, bgcolor=color.green)
+    
+    if breakout_occurred
+        table.cell(info_table, 0, 4, "First Breakout", text_color=color.white, bgcolor=color.blue)
+        table.cell(info_table, 1, 4, str.tostring(first_breakout_price, "#.##"), text_color=color.white, bgcolor=color.blue)
+        
+        table.cell(info_table, 0, 5, "5% Target", text_color=color.black, bgcolor=color.yellow)
+        table.cell(info_table, 1, 5, str.tostring(first_breakout_price * 1.05, "#.##"), text_color=color.black, bgcolor=color.yellow)
+        
+        risk = first_breakout_price - premarket_low
+        table.cell(info_table, 0, 6, "1:3 R:R Target", text_color=color.white, bgcolor=color.orange)
+        table.cell(info_table, 1, 6, str.tostring(first_breakout_price + (risk * 3), "#.##"), text_color=color.white, bgcolor=color.orange)
+        
+        premarket_range = premarket_high - premarket_low
+        table.cell(info_table, 0, 7, "Measured Move", text_color=color.white, bgcolor=color.purple)
+        table.cell(info_table, 1, 7, str.tostring(premarket_high + premarket_range, "#.##"), text_color=color.white, bgcolor=color.purple)
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+alertcondition(pattern_identified and not pattern_identified[1], "Pattern Identified", "Pre-market consolidation pattern detected with highest pre-market volume")
+alertcondition(breakout_occurred and not breakout_occurred[1], "Breakout Alert", "First breakout above pre-market high detected")
+
+// Plot invisible series for alerts
+plot(pattern_identified ? 1 : 0, "Pattern Signal", display=display.none)
+plot(breakout_occurred ? 1 : 0, "Breakout Signal", display=display.none)
+
+// ============================================================================
+// RETROSPECTIVE ANALYSIS FUNCTIONS
+// ============================================================================
+// Function to check if a specific bar is in pre-market
+is_premarket_at_bar(bar_time) =>
+    hour_minute = hour(bar_time, "America/New_York") * 100 + minute(bar_time, "America/New_York")
+    hour_minute >= 400 and hour_minute < 930
+
+// Function to check if a specific bar is in regular hours
+is_regular_hours_at_bar(bar_time) =>
+    hour_minute = hour(bar_time, "America/New_York") * 100 + minute(bar_time, "America/New_York")
+    hour_minute >= 930 and hour_minute < 1600
+
+// Function to analyze a historical day for patterns
+analyze_historical_day(day_offset) =>
+    var float day_premarket_open = na
+    var float day_premarket_high = na
+    var float day_premarket_low = na
+    var float day_consolidation_high = na
+    var float day_consolidation_low = na
+    var float day_breakout_price = na
+    var bool day_pattern_found = false
+    var bool day_breakout_found = false
+    var float day_session_volume = 0.0
+    
+    // Reset for new day
+    day_premarket_open := na
+    day_premarket_high := na
+    day_premarket_low := na
+    day_consolidation_high := na
+    day_consolidation_low := na
+    day_breakout_price := na
+    day_pattern_found := false
+    day_breakout_found := false
+    day_session_volume := 0.0
+    
+    // Scan through the day's bars
+    for i = 0 to 390  // Max bars per day
+        bar_time = time[i + (day_offset * 390)]
+        if not na(bar_time)
+            if is_premarket_at_bar(bar_time)
+                // Track pre-market session
+                if na(day_premarket_open)
+                    day_premarket_open := open[i + (day_offset * 390)]
+                    day_premarket_high := high[i + (day_offset * 390)]
+                    day_premarket_low := low[i + (day_offset * 390)]
+                else
+                    day_premarket_high := math.max(day_premarket_high, high[i + (day_offset * 390)])
+                    day_premarket_low := math.min(day_premarket_low, low[i + (day_offset * 390)])
+                
+                day_session_volume := day_session_volume + volume[i + (day_offset * 390)]
+                
+                // Check for strong move and consolidation
+                if not day_pattern_found
+                    move_pct = ((day_premarket_high - day_premarket_open) / day_premarket_open) * 100
+                    if move_pct >= min_move_pct
+                        current_range = day_premarket_high - day_premarket_low
+                        range_pct = (current_range / day_premarket_high) * 100
+                        if range_pct <= consolidation_threshold
+                            day_pattern_found := true
+                            day_consolidation_high := day_premarket_high
+                            day_consolidation_low := day_premarket_low
+            
+            else if is_regular_hours_at_bar(bar_time) and day_pattern_found and not day_breakout_found
+                // Check for breakout
+                if close[i + (day_offset * 390)] > day_consolidation_high
+                    day_breakout_found := true
+                    day_breakout_price := close[i + (day_offset * 390)]
+    
+    [day_pattern_found, day_breakout_found, day_breakout_price, day_consolidation_high, day_consolidation_low, day_session_volume]
+
+// ============================================================================
+// RETROSPECTIVE PATTERN SCANNING
+// ============================================================================
+var array<line> historical_lines = array.new<line>()
+var array<label> historical_labels = array.new<label>()
+
+if retrospective_mode and barstate.islast
+    // Clear previous historical markers
+    for i = 0 to array.size(historical_lines) - 1
+        line.delete(array.get(historical_lines, i))
+    array.clear(historical_lines)
+    
+    for i = 0 to array.size(historical_labels) - 1
+        label.delete(array.get(historical_labels, i))
+    array.clear(historical_labels)
+    
+    // Scan historical days
+    for day = 1 to max_historical_days
+        [pattern_found, breakout_found, breakout_price, pm_high, pm_low, session_vol] = analyze_historical_day(day)
+        
+        if pattern_found
+            // Calculate bar index for this historical day
+            historical_bar = bar_index - (day * 390)
+            
+            // Draw historical pattern lines
+            if not na(pm_high)
+                hist_line = line.new(historical_bar - 20, pm_high, historical_bar + 50, pm_high, color=color.red, width=1, style=line.style_solid)
+                array.push(historical_lines, hist_line)
+                
+                hist_label = label.new(historical_bar, pm_high, "HISTORICAL\n" + str.tostring(pm_high, "#.##"), color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
+                array.push(historical_labels, hist_label)
+            
+            if not na(pm_low)
+                hist_line = line.new(historical_bar - 20, pm_low, historical_bar + 50, pm_low, color=color.green, width=1, style=line.style_solid)
+                array.push(historical_lines, hist_line)
+                
+                hist_label = label.new(historical_bar, pm_low, "HISTORICAL\n" + str.tostring(pm_low, "#.##"), color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
+                array.push(historical_labels, hist_label)
+            
+            if breakout_found and not na(breakout_price)
+                hist_line = line.new(historical_bar, breakout_price, historical_bar + 30, breakout_price, color=color.blue, width=2, style=line.style_dashed)
+                array.push(historical_lines, hist_line)
+                
+                hist_label = label.new(historical_bar, breakout_price, "HISTORICAL\nBREAKOUT\n" + str.tostring(breakout_price, "#.##"), color=color.blue, style=label.style_label_left, textcolor=color.white, size=size.tiny)
+                array.push(historical_labels, hist_label)

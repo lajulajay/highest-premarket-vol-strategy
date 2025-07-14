@@ -12,6 +12,7 @@ This is a Pine Script indicator designed for TradingView that detects breakout t
 highest-premarket-vol-strategy/
 ├── highest-premarket-vol-strategy.pine
 ├── README.md
+├── CHANGELOG.md
 ├── LICENSE
 └── .gitignore
 ```
@@ -34,6 +35,13 @@ highest-premarket-vol-strategy/
 - **Real-time Breakout Detection**: Captures actual breakout price during regular hours
 - **Multiple Target Calculations**: 5% gain, 1:3 R:R, and measured move targets
 - **Pattern Annotations**: Retest, bull flag, and ABCD pattern detection
+
+### **Visual Customization:**
+- **Label Display Controls**: Toggle visibility of level labels and pattern recognition labels
+- **Label Size Options**: Choose between tiny, small, or normal label sizes
+- **Streamlined Visuals**: Compact display options for crowded charts (especially 1-minute)
+- **Background Highlights**: Translucent highlighting for pre-market consolidation and breakout candles
+- **Information Table**: Real-time display of volume ratios, levels, and targets
 
 ## 📈 Strategy Overview
 
@@ -73,11 +81,22 @@ This indicator implements a comprehensive pre-market volume-based breakout strat
 4. **Monitor Signals**: Watch for pattern identification and breakout alerts
 
 ### **Key Parameters:**
+
+#### **Volume Analysis:**
 - **1m Pre-market Volume Lookback Days**: Days to calculate historic pre-market volume highest (default: 10 days)
 - **5m Pre-market Volume Lookback Days**: Days for 5m confirmation (default: 8 days)
 - **Min Pre-market Volume vs Historic Highest**: Volume threshold multiplier (default: 1.5x)
-- **Minimum Move %**: Required percentage move for strong initial move (default: 2%)
-- **Consolidation Threshold %**: Maximum range for consolidation (default: 1.5%)
+
+#### **Pattern Detection:**
+- **Minimum Move %**: Required percentage move for strong initial move (default: 50%)
+- **Consolidation Threshold %**: Maximum range for consolidation (default: 5.0%)
+- **Min Consolidation Bars**: Minimum bars for valid consolidation (default: 5)
+
+#### **Display Options:**
+- **Show Level Labels**: Display pre-market high/low and breakout labels (default: true)
+- **Show Pattern Recognition Labels**: Display bull flag, ABCD, retest labels (default: false)
+- **Label Size**: Choose label size - tiny, small, or normal (default: small)
+- **Show Targets**: Display target level lines and labels (default: true)
 
 ### **TradingView Account Limits:**
 The script is optimized for different TradingView account types:
@@ -99,7 +118,14 @@ git clone https://github.com/lajulajay/highest-premarket-vol-strategy.git
 
 ## 🔄 Version History
 
-### **v2.0.0** (Current)
+### **v2.1.0** (Current)
+- ✅ **Enhanced Display Controls**: Added label visibility and size options
+- ✅ **Streamlined Visuals**: Improved label positioning and reduced chart crowding
+- ✅ **Better User Experience**: More intuitive parameter organization
+- ✅ **Performance Optimizations**: Improved variable management and error handling
+- ✅ **Visual Customization**: Flexible label display for different chart timeframes
+
+### **v2.0.0** (Previous)
 - ✅ **Fixed Pre-market Volume Analysis**: Now properly compares pre-market volume to historic highest volume
 - ✅ **Improved Pattern Detection**: Correctly identifies single strong move + consolidation
 - ✅ **Precise Level Marking**: Uses consolidation high/low (candle bodies, not wicks)
@@ -108,14 +134,14 @@ git clone https://github.com/lajulajay/highest-premarket-vol-strategy.git
 - ✅ **Better Pattern Recognition**: More accurate retest, bull flag, and ABCD detection
 - ✅ **Pre-market Volume Requirement Integration**: Pattern only triggers when pre-market volume criteria met
 
-### **v1.0.0** (Previous)
+### **v1.0.0** (Initial)
 - Basic breakout detection
 - Simple target calculations
 - Limited pattern recognition
 
 ## 🤝 Contributing
 
-This script now fully implements the specified requirements. PRs welcome for:
+This script now fully implements the specified requirements with enhanced visual customization. PRs welcome for:
 - Enhanced pattern detection algorithms
 - Additional technical indicators
 - Improved visualization options
@@ -123,7 +149,7 @@ This script now fully implements the specified requirements. PRs welcome for:
 
 ## 🔖 Version
 
-**Current Version:** `v2.0.0`  
-Complete implementation of highest pre-market volume strategy with all specified requirements.
+**Current Version:** `v2.1.0`  
+Complete implementation of highest pre-market volume strategy with enhanced display controls and visual customization.
 
-[View release notes →](https://github.com/lajulajay/highest-premarket-vol-strategy/releases/tag/v2.0.0)
+[View release notes →](https://github.com/lajulajay/highest-premarket-vol-strategy/releases/tag/v2.1.0)

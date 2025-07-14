@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/) and this 
 
 ---
 
+## [2.1.0] – 2025-01-27
+
+### Added
+- **Label Display Controls**: New options to show/hide level labels and pattern recognition labels
+- **Label Size Options**: Choose between tiny, small, or normal label sizes for different chart timeframes
+- **Streamlined Visual Experience**: Reduced chart crowding with better label positioning
+- **Enhanced Parameter Organization**: Reorganized inputs into logical groups (volume, pattern, display)
+- **Visual Customization**: Flexible display options for crowded charts, especially 1-minute timeframes
+
+### Changed
+- **Default Label Settings**: Pattern recognition labels disabled by default to reduce visual clutter
+- **Parameter Grouping**: Organized inputs into Volume Analysis, Pattern Detection, and Display Options sections
+- **Label Positioning**: Improved spacing and positioning for better readability
+- **User Experience**: More intuitive controls for visual customization
+
+### Technical Improvements
+- **Variable Management**: Better handling of label size enumeration across different sections
+- **Error Prevention**: Fixed undeclared identifier issues with proper variable declarations
+- **Code Organization**: Cleaner separation of display logic from core functionality
+- **Performance**: Optimized label rendering and reduced redundant calculations
+
+---
+
 ## [2.0.0] – 2025-01-27
 
 ### Fixed

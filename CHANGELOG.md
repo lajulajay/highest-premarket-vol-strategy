@@ -14,18 +14,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/) and this 
 - **Streamlined Visual Experience**: Reduced chart crowding with better label positioning
 - **Enhanced Parameter Organization**: Reorganized inputs into logical groups (volume, pattern, display)
 - **Visual Customization**: Flexible display options for crowded charts, especially 1-minute timeframes
+- **Advanced Consolidation Detection**: Bar-to-bar range comparison instead of session min/max analysis
+- **Consecutive Small Ranges**: Detects consolidation when enough consecutive bars show small ranges
+- **Post-Move Analysis**: Only considers bars after the strong move for consolidation detection
 
 ### Changed
 - **Default Label Settings**: Pattern recognition labels disabled by default to reduce visual clutter
 - **Parameter Grouping**: Organized inputs into Volume Analysis, Pattern Detection, and Display Options sections
 - **Label Positioning**: Improved spacing and positioning for better readability
 - **User Experience**: More intuitive controls for visual customization
+- **Consolidation Detection Logic**: Switched from session range analysis to bar-to-bar comparison for more accurate pattern detection
 
 ### Technical Improvements
 - **Variable Management**: Better handling of label size enumeration across different sections
 - **Error Prevention**: Fixed undeclared identifier issues with proper variable declarations
 - **Code Organization**: Cleaner separation of display logic from core functionality
 - **Performance**: Optimized label rendering and reduced redundant calculations
+- **Consolidation Algorithm**: More precise detection using consecutive small bar-to-bar ranges
 
 ---
 

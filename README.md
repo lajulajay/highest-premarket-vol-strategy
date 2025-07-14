@@ -35,6 +35,7 @@ highest-premarket-vol-strategy/
 - **Real-time Breakout Detection**: Captures actual breakout price during regular hours
 - **Multiple Target Calculations**: 5% gain, 1:3 R:R, and measured move targets
 - **Pattern Annotations**: Retest, bull flag, and ABCD pattern detection
+- **Advanced Consolidation Detection**: Bar-to-bar range comparison with consecutive small ranges
 
 ### **Visual Customization:**
 - **Label Display Controls**: Toggle visibility of level labels and pattern recognition labels
@@ -50,7 +51,9 @@ This indicator implements a comprehensive pre-market volume-based breakout strat
 ### **Step 1: Pre-market Pattern Identification**
 - Monitors pre-market volume vs historic highest (configurable lookback)
 - Detects strong initial move up (configurable minimum %)
-- Identifies price consolidation after the move
+- **Advanced Consolidation Detection**: Compares each bar to the previous bar (bar-to-bar range analysis)
+- **Consecutive Small Ranges**: Detects consolidation when enough consecutive bars show small ranges
+- **Post-Move Analysis**: Only considers bars after the strong move for consolidation detection
 - Ensures only one such move occurs (no multiple moves)
 
 ### **Step 2: Key Level Marking**
@@ -124,6 +127,8 @@ git clone https://github.com/lajulajay/highest-premarket-vol-strategy.git
 - ✅ **Better User Experience**: More intuitive parameter organization
 - ✅ **Performance Optimizations**: Improved variable management and error handling
 - ✅ **Visual Customization**: Flexible label display for different chart timeframes
+- ✅ **Advanced Consolidation Detection**: Bar-to-bar range comparison with consecutive small ranges
+- ✅ **Post-Move Analysis**: Only considers bars after strong move for consolidation detection
 
 ### **v2.0.0** (Previous)
 - ✅ **Fixed Pre-market Volume Analysis**: Now properly compares pre-market volume to historic highest volume
